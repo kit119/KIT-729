@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Cache-Control" content="public, max-age=31536000">
+
+<title>Kuthodaw Inscription Tipitaka</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☸️</text></svg>">
+
+<link href="./assets/leaflet.css" rel="stylesheet">
+<script src="./assets/leaflet.js"></script>
+<link href="./assets/L.Control.Layers.Tree.css" rel="stylesheet">
+<script src="./assets/L.Control.Layers.Tree.min.js"></script>
+<script src="./assets/openseadragon.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined" rel="stylesheet">
+
+<style>
+:root {
+    --primary-gold: #C5A059;
+    --primary-dark: #2C2C2C;
+    --bg-cream: #F9F7F2;
+    --surface-white: #FFFFFF;
+    --shadow-soft: 0 8px 30px rgba(0,0,0,0.08);
+    --shadow-hover: 0 10px 40px rgba(197, 160, 89, 0.2);
+    --border-radius: 12px;
+    --font-serif: 'Noto Serif', serif;
+    --font-sans: 'Sarabun', sans-serif;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-cream);
+    font-family: var(--font-sans);
+    overflow: hidden;
+}
+
+/* Map Container */
+#map {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background: var(--bg-cream);
+}
+
+#osd-container {
+    position: absolute; 
+    top: 0; left: 0; 
+    width: 100%; height: 100%; 
+    z-index: 900; 
+    background: #111; 
+    visibility: hidden;
+}
+
+/* --- UI COMPONENTS --- */
+
+/* 1. Loading Spinner (Elegant) */
+#loading-spinner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 25px 40px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-soft);
+    font-family: var(--font-serif);
+    color: var(--primary-gold);
+    font-size: 1.2rem;
+    display: none;
+    z-index: 5000;
+    border: 1px solid rgba(197, 160, 89, 0.2);
+    backdrop-filter: blur(5px);
+}
+#loading-spinner::before {
+    content: "☸";
+    display: block;
+    font-size: 2rem;
+    text-align: center;
+    margin-bottom: 10px;
+    animation: spin 2s linear infinite;
+}
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* 2. Hamburger Menu Button */
+.menu-trigger {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 2000;
+    background: var(--surface-white);
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    color: var(--primary-dark);
+}
+.menu-trigger:hover {
+    transform: scale(1.05);
+    box-shadow: var(--shadow-hover);
+    color: var(--primary-gold);
+}
+.menu-trigger span { font-size: 28px; }
+
+/* 3. Sliding Sidebar Menu (Hidden by default) */
+.side-menu {
+    position: fixed;
+    top: 0;
+    right: -320px; /* Hidden */
+    width: 300px;
+    height: 100vh;
+    background: var(--surface-white);
+    z-index: 1999;
+    box-shadow: -5px 0 30px rgba(0,0,0,0.1);
+    transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 80px 25px 20px 25px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.side-menu.open { right: 0; }
+
+.menu-header {
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    color: var(--primary-dark);
+    border-bottom: 2px solid var(--primary-gold);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.control-label {
+    font-size: 0.9rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+}
+
+/* Styled Buttons inside Menu */
+.btn-modern {
+    background: var(--bg-cream);
+    border: 1px solid #E0E0E0;
+    padding: 12px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    color: var(--primary-dark);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+    width: 100%;
+    text-align: left;
+}
+.btn-modern:hover {
+    background: #F0EAE0;
+    border-color: var(--primary-gold);
+}
+.btn-modern.active {
+    background: var(--primary-gold);
+    color: white;
+    border-color: var(--primary-gold);
+    font-weight: 600;
+}
+.btn-modern .material-symbols-outlined { font-size: 20px; }
+
+/* 4. Floating Bottom Dock (Navigation) */
+.floating-dock {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1001;
+    background: var(--surface-white);
+    padding: 10px 20px;
+    border-radius: 50px;
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border: 1px solid rgba(0,0,0,0.05);
+}
+
+.nav-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--primary-dark);
+    padding: 8px;
+    border-radius: 50%;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.nav-btn:hover { background: #F5F5F5; color: var(--primary-gold); }
+.nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.page-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+#goto-input {
+    width: 60px;
+    border: none;
+    border-bottom: 2px solid #ddd;
+    text-align: center;
+    font-family: var(--font-serif);
+    font-size: 1.2rem;
+    color: var(--primary-dark);
+    background: transparent;
+    padding: 5px;
+}
+#goto-input:focus { outline: none; border-color: var(--primary-gold); }
+
+/* 5. Leaflet Tree Control Styling (Override) */
+.leaflet-touch .leaflet-control-layers, .leaflet-touch .leaflet-bar {
+    border: none !important;
+    box-shadow: var(--shadow-soft) !important;
+    border-radius: var(--border-radius) !important;
+    font-family: var(--font-sans);
+}
+.leaflet-control-layers-expanded {
+    padding: 15px !important;
+    background: rgba(255,255,255,0.95) !important;
+    backdrop-filter: blur(10px);
+    max-height: 80vh;
+    overflow-y: auto;
+    min-width: 250px;
+}
+.leaflet-control-layers-selector { accent-color: var(--primary-gold); }
+.leaflet-control-attribution { 
+    background: rgba(255,255,255,0.8) !important; 
+    font-size: 10px;
+}
+
+/* Overlay for when menu is open */
+#menu-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.3);
+    z-index: 1998;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+#menu-overlay.active { opacity: 1; pointer-events: auto; }
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+    .floating-dock { bottom: 20px; width: 85%; justify-content: space-between; }
+    .menu-trigger { top: 15px; right: 15px; width: 40px; height: 40px; }
+    .side-menu { width: 80%; }
+}
+
+</style>
+</head>
+<body>
+
+<button id="menu-toggle-btn" class="menu-trigger" aria-label="Menu">
+    <span class="material-symbols-outlined">menu</span>
+</button>
+
+<div id="menu-overlay"></div>
+
+<div id="side-menu" class="side-menu">
+    <div class="menu-header">Display Options</div>
+    
+    <div class="control-group" id="filter-controls">
+        <div class="control-label">Visual Mode</div>
+        <button id="filter-light" class="btn-modern active"><span class="material-symbols-outlined">light_mode</span> Light (Original)</button>
+        <button id="filter-sepia" class="btn-modern"><span class="material-symbols-outlined">history_edu</span> Sepia (Vintage)</button>
+        <button id="filter-dark" class="btn-modern"><span class="material-symbols-outlined">dark_mode</span> Dark (Inverted)</button>
+        
+        <div class="control-label" style="margin-top:15px;">Reading Aids</div>
+        <button id="filter-page" class="btn-modern"><span class="material-symbols-outlined">article</span> Show Page Borders</button>
+        <button id="filter-half" class="btn-modern"><span class="material-symbols-outlined">book</span> Split Half</button>
+        <button id="filter-line" class="btn-modern"><span class="material-symbols-outlined">format_align_justify</span> Line Ruler</button>
+        
+        <div class="control-label" style="margin-top:15px;">Tools</div>
+        <button id="open-osd" class="btn-modern"><span class="material-symbols-outlined">zoom_in</span> Deep Zoom Mode</button>
+    </div>
+</div>
+
+<div id="goto-controls" class="floating-dock">
+    <button id="prev-button" class="nav-btn" title="Previous Slab"><span class="material-symbols-outlined">arrow_back_ios</span></button>
+    
+    <div class="page-input-wrapper">
+        <span class="material-symbols-outlined" style="font-size:18px; color:#C5A059;">tag</span>
+        <input type="number" id="goto-input" title="Stelae No.1-729" min="-4" max="729" value="0">
+    </div>
+    
+    <button id="next-button" class="nav-btn" title="Next Slab"><span class="material-symbols-outlined">arrow_forward_ios</span></button>
+</div>
+
+<div id="loading-spinner">Summoning Stela...</div>
+
+<div id='map'></div>
+<div id="osd-container"></div>
+
+
+<script>
+// --- UI LOGIC (New) ---
+const menuBtn = document.getElementById('menu-toggle-btn');
+const sideMenu = document.getElementById('side-menu');
+const overlay = document.getElementById('menu-overlay');
+
+function toggleMenu() {
+    sideMenu.classList.toggle('open');
+    overlay.classList.toggle('active');
+    const icon = menuBtn.querySelector('span');
+    icon.innerText = sideMenu.classList.contains('open') ? 'close' : 'menu';
+}
+
+menuBtn.addEventListener('click', toggleMenu);
+overlay.addEventListener('click', toggleMenu);
+
+// Close menu when a filter is selected (Optional, better UX)
+/*
+document.querySelectorAll('#filter-controls button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        // toggleMenu(); // Uncomment if you want menu to close on click
+    });
+});
+*/
+
+// --- ORIGINAL LOGIC BELOW (Keep exactly as is to ensure function) ---
+
+const map = L.map('map', {
+  crs: L.CRS.Simple, minZoom:-3, maxZoom:0, 
+  zoomControl: false, attributionControl: true,
+});
+// Force attribution to bottom right nicely
+map.attributionControl.setPrefix('<span style="color:#666">World&apos;s Largest Book Project</span>');
+
+function showSpinner() { document.getElementById("loading-spinner").style.display = "block" }
+function hideSpinner() { document.getElementById("loading-spinner").style.display = "none" }
+
+const KIT = {};
+const xx = 3840;
+const yy = 5760;
+const bounds = [xy(0,0), xy(xx*2,yy)];
+const pad = (n, w = 3) => (n+'').padStart(w, '0');
+function xy(x,y){return Array.isArray(x)?L.latLng(x[1],x[0]):L.latLng(y,x)}
+function XX(i,j){return [[yy*0,xx*i],[yy*1,xx*i],[yy*1,xx*j],[yy*0,xx*j]]}
+
+map.setView(xy(xx*1, yy*0.60),-10);
+map.createPane('imagePane');
+map.getPane('imagePane').style.zIndex = 200;    
+map.getPane('imagePane').style.pointerEvents = 'none'; 
+map.createPane('vectorPane');
+map.getPane('vectorPane').style.zIndex = 1000;  
+
+function vOpt(color,weight=1,fillopa=0.1,dash=1){
+  return {color:color,weight:weight ,fillOpacity:fillopa, dashArray:dash,pane:'vectorPane'}
+}
+
+KIT['page'] = L.layerGroup([
+  L.polygon(XX(0,1),vOpt('yellow')), 
+  L.polygon(XX(1,2),vOpt('green')),  
+]);
+
+KIT['half'] = L.layerGroup([
+  L.polygon(XX(0,0.5),vOpt('yellow')), 
+  L.polygon(XX(1,1.5),vOpt('yellow')), 
+  L.polygon(XX(0.5,1),vOpt('green')), 
+  L.polygon(XX(1.5,2),vOpt('green')), 
+]);
+
+function arRuler(len){
+  tmp=[], arr = Array.from({length:len+1},(_,i)=>i)
+  arr.map(a=>tmp.push([[yy*a/len,xx*0],[yy*a/len,xx*2]]))
+  return tmp
+}
+
+KIT['line'] = L.layerGroup([
+  L.polyline(arRuler(10),vOpt('red',1.5,0,1)), 
+  L.polyline(arRuler(20),vOpt('blue',1.0,0,2)), 
+  L.polyline(arRuler(100),vOpt('green',0.5,0,3)), 
+])
+
+const FILTERS = {
+  'light': 'invert(0%)',
+  'sepia': 'sepia(100%) hue-rotate(10deg) contrast(0.9)', 
+  'dark': 'invert(100%) hue-rotate(180deg)' 
+};
+
+let currentFilter = 'light';
+let currentPage   = 0; 
+
+function toggleLayer(layer, buttonElement) {
+  if (map.hasLayer(layer)) { 
+    map.removeLayer(layer);if (buttonElement) {buttonElement.classList.remove('active'); }
+  } 
+  else { 
+    map.addLayer(layer); if (buttonElement) {buttonElement.classList.add('active'); }
+  }
+}
+
+function applyImageFilter(filterName) {
+  const filterValue = FILTERS[filterName] || FILTERS['light'];
+  currentFilter = filterName;
+  const imagePane = map.getPane('imagePane');
+  if (imagePane) {imagePane.style.filter = filterValue;}    
+  document.querySelectorAll('#filter-controls button').forEach(button => {
+    // Check if button ID contains the filter name (to handle specific filter buttons only)
+    if(['light','sepia','dark'].some(f => button.id.endsWith(f))) {
+        if (button.id.endsWith(filterName)) { button.classList.add('active') } 
+        else { button.classList.remove('active') }
+    }
+  });
+}
+
+function loadPageLayer(key) {
+  const layer = KIT[key] 
+  if (!layer) return;
+  Object.values(KIT).forEach(layer => { if (map.hasLayer(layer)) map.removeLayer(layer) });
+  map.addLayer(layer);
+  controlTree.collapseTree(false).expandSelected(false)
+}
+
+function getPageKey(n) {
+  if (n ===  0) return '000';
+  if (n === -1) return '00A';
+  if (n === -2) return '00B';
+  if (n === -3) return '00C';
+  if (n === -4) return '00D';
+  if (n >= 1 && n <= 729) return pad(n); 
+  return null; 
+}
+
+function gotoPage(n) {
+  try { const key = getPageKey(n);
+	if (!key) throw new Error('Invalid page number');
+	currentPage = n;
+	loadOSDImage(n);
+	document.getElementById("goto-input").value = n;
+	loadPageLayer(key);
+	updateHash(); 
+  } catch (error) {
+    console.error('Navigation error:', error);
+    // alert('Cannot navigate to page ' + n); // Alert removed for better UX
+  }
+  preloadNeighbors(n);
+}
+
+
+function preloadNeighbors(page){
+  const neighbors = [page - 1, page + 1];
+  neighbors.forEach(p => {
+    if(p < -4 || p > 729) return;
+    const key = getPageKey(p);
+    const layer = KIT[key];
+    if(layer && !layer._loaded && !layer._prefetched){
+      const img = new Image();
+      img.src = layer._imagePath;
+      layer._prefetched = true;
+    }
+  });
+}
+
+function updateHash() {
+    const zoom = map.getZoom();
+    const center = map.getCenter();
+    const x = Math.round(center.lng);
+    const y = Math.round(center.lat);
+    const pageKey = getPageKey(currentPage);
+    const newhash = `#KIT${pageKey}/Z${zoom}/X${x}/Y${y}`;
+    //history.replaceState(null, '', newhash);   
+}
+
+function loadFromHash() {
+    if (!location.hash) return;
+    const h = location.hash.substring(1).split('/'); 
+    if (h.length < 4) return;
+    const page = h[0].replace("KIT", ""); 
+    const zoom = parseInt(h[1].replace("Z", ""));
+    const xcor = parseInt(h[2].replace("X", ""));
+    const ycor = parseInt(h[3].replace("Y", ""));
+    if(Number.isNaN(zoom) || Number.isNaN(xcor) || Number.isNaN(ycor)) return;
+    if (isNaN(parseInt(page))) {
+        const special = { "000":0, "00A":-1, "00B":-2, "00C":-3, "00D":-4 };
+        if (special[page] != null) gotoPage(special[page]);
+    } 
+    else { gotoPage(parseInt(page)) }
+    map.setView([ycor, xcor], zoom);
+}
+
+const debouncedUpdateHash = debounce(() => {try{updateHash()} catch(e){console.error('updateHash error', e)}}, 250);
+
+function debounce(fn, wait = 200){
+  let timer = null;
+  return function(...args){
+    const ctx = this;
+    clearTimeout(timer);
+    timer = setTimeout(()=> fn.apply(ctx, args), wait);
+  };
+}
+
+map.on("moveend", debouncedUpdateHash);
+map.on("zoomend", debouncedUpdateHash);
+window.addEventListener("load", function() {loadFromHash();});
+
+['000','00A','00B','00C','00D'].forEach(k => {
+    KIT[k] = L.layerGroup(); 
+    KIT[k]._imagePath = `images/clean/${k}.webp`;
+});
+
+for (let i=1;i<=729;i++) {
+  let k = pad(i);
+  KIT[k] = L.layerGroup(); 
+  KIT[k]._imagePath = `images/clean/${k}.webp`;
+}
+
+map.on('layeradd', function(e) {
+  if (e.layer._imagePath && !e.layer._loaded) {
+	showSpinner(); 
+	var imageOverlay = L.imageOverlay(e.layer._imagePath, bounds, {pane: 'imagePane'});
+	imageOverlay.on('load', function() { hideSpinner(); applyImageFilter(currentFilter) });
+    imageOverlay.on('error',function() { hideSpinner(); console.error("Failed to load image:", e.layer._imagePath);});
+	imageOverlay.addTo(e.layer);
+	e.layer._loaded = true;
+  }
+});
+
+overTree = {label:'<b>Reading Tools</b>', children: [
+  {label: 'Pagination', layer:KIT['page']},
+  {label: 'HalvingArea',layer:KIT['half']},
+  {label: 'LinerScale', layer:KIT['line']},
+]};  
+
+const N1 = (a, ...b) => typeof a == 'string' 
+  ? { label: `<b>${a}</b>`, children: b.flat() }
+  : Array.from({length:b[0]}, (_,i) => ({label: `${pad(a+i)}-${b[1]}-${pad(b[3] ? b[2]-i : i+(b[2]||1), 2)}`,layer: KIT[pad(a+i)] }));
+const N2 = (title, start, number) => N1(title + ' [' + number + ']', N1(start, number, title.toLowerCase()));
+const N3 = (title, n1,n2) => N1(title + ' [' + (n1[1]+n2[1]) +']', 
+  N1(n1[0], n1[1], title.toLowerCase(), n1[2], n1[3]),
+  N1(n2[0], n2[1], title.toLowerCase(), n2[2], n2[3])
+)
+
+baseTree = {
+  label: '<b>Kuthodaw Ins. Tipitaka [729]<br><span style="font-weight:normal;font-size:0.9em">The World&apos;s Largest Book</span> <a target="_blank" href="KIT729.pdf" style="color:#C5A059">[PDF]</a></b>',
+  children: [
+    { label: '<b>Cover and History [4]</b>', children: [
+        {label: 'Cover', layer:KIT['000'], radioGroup:'page'},
+        ...['A','B','C','D'].map((c,i) => ({label: `History-${i+1}`, layer:KIT['00'+c], radioGroup:'page'}))
+    ]},
+    N1('Vinaya Pitaka [111]',
+	  N3('Pārājika',[1,14,14,1],[38,5,19,1]),N2('Pātimokkha',15,2),
+      N2('Pācittiya (Bhikkhu)',17,13),N3('Pācittiya (Bhikkhunī)',[30,8],[43,1,9]),
+      N2('Mahāvagga',44,26),N2('Cūḷavagga',70,25),N2('Parivāra',95,17,)
+    ),
+    N1('Suttanta Pitaka [410]',
+	  N1('Dīgha Nikāya [36]',N2('Sīlakkhandavagga',320,11),N2('Mahāvagga',331,13),N2('Pāthikavagga',344,12)),
+	  N1('Majjhima Nikāya [62]',N2('Mūlapaṇṇāsa',356, 20),N2('Majjhimapaṇṇāsa',376, 24,),N2('Uparipaṇṇāsa',400, 18,)),
+	  N1('Saṃyutta Nikāya [65]',N2('Sagāthāvagga',418,9),N2('Nidānavagga',427,11),N2('Khandhavagga',438,10),N2('Saḷāyatanavagga',448,15),N2('Mahāvagga',463,20)),
+	  N1('Aṅguttara Nikāya [78]',N2('Ekaka-Nipāta',483, 2),N2('Duka-Nipāta',485, 2),N2('Tika-Nipāta',487, 10),N2('Catukka-Nipāta',497, 13),N2('Pañcaka-Nipāta',510, 12),N2('Chakka-Nipāta',522, 6),N2('Sattaka-Nipāta',528, 6),N2('Aṭṭhaka-Nipāta',534, 8),N2('Navaka-Nipāta',542, 5),N2('Dasaka-Nipāta',547, 12),N2('Ekādasaka-Nipāta',559, 2)),
+	  N1('Khuddaka Nikāya [169]',N2('Khuddakapātha',561, 1,),N2('Dhammapada',562, 2),N2('Udāna',564, 5),N2('Itivuttaka',569, 3),N2('Suttanipāta',572, 5),N2('Vimānavatthu',577, 3,),N2('Petavatthu',580, 3),N2('Theragāthā',583, 4),N2('Therīgāthā',587, 2),N2('Pāthajātaka',589, 21),N2('Mahāniddesa',610, 19),N2('Cūḷaniddesa',629, 14),N2('Paṭisambhidāmagga',643, 22),N2('Therapādāna',665, 19),N2('Therīapādāna',684, 4),N2('Buddhavaṃsa',688, 3),N2('Cariyāpiṭaka',691, 2),N2('Netti',693, 8),N2('Peṭakopadesa',701, 9),N2('Miliṅdapañhā',710, 20))
+    ),
+	N1('Abhidhamma Pitaka [208]',
+	  N2('Dhammasaṅgaṇī',112, 13),N2('Vibhaṅga',125, 21),
+	  N2('Dhātukathā',146, 4),N2('Puggalapaññatti',150, 4),
+	  N2('Kathāvatthu',154, 20),N2('Yamaka',174, 47),N2('Paṭṭhāna',221, 99)
+	)
+  ]
+};
+
+
+const BUTTON = {
+  light:  { id: 'filter-light',  fn: () => applyImageFilter('light') },
+  sepia:  { id: 'filter-sepia',  fn: () => applyImageFilter('sepia') },
+  dark:   { id: 'filter-dark',   fn: () => applyImageFilter('dark')  },
+  page:   { id: 'filter-page',   fn: el => toggleLayer(KIT.page, el) },
+  half:   { id: 'filter-half',   fn: el => toggleLayer(KIT.half, el) },
+  line:   { id: 'filter-line',   fn: el => toggleLayer(KIT.line, el) },
+  prev:   { id: 'prev-button',   fn: el => gotoPage(currentPage - 1) },
+  next:   { id: 'next-button',   fn: el => gotoPage(currentPage + 1) }
+};
+
+Object.entries(BUTTON).forEach(([key, cfg]) => {
+  const el = document.getElementById(cfg.id);
+  if(el) el.addEventListener('click', () => cfg.fn(el));
+});
+
+applyImageFilter('light');
+
+document.getElementById("goto-input").addEventListener("keydown", function(e) { "Enter"===e.key&&gotoPage(parseInt(this.value)) });
+document.getElementById("goto-input").addEventListener("change", function() { gotoPage(parseInt(this.value)) });
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'PageDown')  gotoPage(currentPage - 1);
+  if (e.key === 'PageUp')  gotoPage(currentPage + 1);
+  if (e.key === 'Backspace')  gotoPage(currentPage - 1);
+  if (e.key === ' ' || event.code === 'Space') gotoPage(currentPage + 1);
+});
+
+
+controlTree = L.control.layers.tree(baseTree, overTree, {
+  position:'topleft',
+  namedToggle:true, selectorBack:false, 
+  closedSymbol:'<span style="font-family:monospace">+</span>', openedSymbol:'<span style="font-family:monospace">-</span>', spaceSymbol:' ',
+});
+controlTree.addTo(map).collapseTree(false).expandSelected(false)
+
+map.addLayer(KIT['000'])
+
+</script>
+
+<script>
+// --- DEEP ZOOM LOGIC (Preserved) ---
+const viewer = OpenSeadragon({
+    id: "osd-container",
+    prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/5.0.1/images/",
+    showNavigator: true, 
+    maxZoomLevel: 50,
+    defaultZoomLevel: 1,
+    gestureSettingsMouse: {
+        clickToZoom: true,
+        dblClickToZoom:true
+    },	
+    showNavigationControl: false,
+    showRotationControl: false,
+    showNavigator: true,
+    navigatorPosition: "TOP_LEFT",
+    animationTime: 0.8,
+    visibilityRatio: 1.0,
+    constrainDuringPan: true,
+});
+
+let isDeepZoomMode = false;
+
+document.getElementById("open-osd").onclick = () => {
+    toggleDeepZoom();
+};
+
+function toggleDeepZoom() {
+    const osdDiv = document.getElementById("osd-container");
+    isDeepZoomMode = !isDeepZoomMode;
+    const btn = document.getElementById("open-osd");
+    
+    if (isDeepZoomMode) {
+        osdDiv.style.visibility = 'visible';
+        loadOSDImage(currentPage); 
+        btn.classList.add("active");
+        btn.innerHTML = '<span class="material-symbols-outlined">zoom_out_map</span> Exit Deep Zoom';
+        controlTree.remove()
+        // Close menu for better view
+        if(sideMenu.classList.contains('open')) toggleMenu();
+    } else {
+        osdDiv.style.visibility = 'hidden';
+        btn.classList.remove("active");
+        btn.innerHTML = '<span class="material-symbols-outlined">zoom_in</span> Deep Zoom Mode';
+        controlTree.addTo(map)
+    }
+}
+
+function loadOSDImage(n) {
+    if (!isDeepZoomMode) return; 
+    const key = getPageKey(n);
+    const imagePath = `images/clean/${key}.webp`; 
+    viewer.open({type: 'image',url: imagePath, buildPyramid: false});
+}
+</script>
+
+</body>
+</html>
